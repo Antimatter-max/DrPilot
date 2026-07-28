@@ -37,18 +37,20 @@ class EmbeddingModelWrapper:
             # many SBERT models (all-MiniLM-L6-v2) output 384-d
             self.dim = getattr(self.model, 'get_sentence_embedding_dimension', lambda: 384)()
         except Exception:
-            # Try OpenAI if key is present
+            # Optionally allow OpenAI only when explicitly enabled via env var USE_OPENAI=true
             try:
-                import openai
-                api_key = os.getenv("OPENAI_API_KEY")
-                if api_key:
-                    openai.api_key = api_key
-                    self.backend = "openai"
-                    self.model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-                    print(f"[Embeddings] Using OpenAI Embeddings: {self.model}")
-                    # typical dims vary; leave dim at 384 by default
+                if os.getenv("USE_OPENAI", "false").lower() == "true":
+                    import openai
+                    api_key = os.getenv("OPENAI_API_KEY")
+                    if api_key:
+                        openai.api_key = api_key
+                        self.backend = "openai"
+                        self.model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+                        print(f"[Embeddings] Using OpenAI Embeddings: {self.model} (enabled by USE_OPENAI=true)")
+                    else:
+                        raise Exception("USE_OPENAI is true but OPENAI_API_KEY is not set")
                 else:
-                    raise Exception("No OpenAI key")
+                    raise Exception("OpenAI disabled by USE_OPENAI env var")
             except Exception:
                 # Fallback to fastembed if available
                 try:
