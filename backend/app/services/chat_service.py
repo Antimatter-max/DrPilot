@@ -32,7 +32,8 @@ def process_patient_chat(
     patient_uid: str,
     user_message: str,
     vna_data: Dict[str, Any],
-    chat_history: List[Dict[str, str]] = None
+    chat_history: List[Dict[str, str]] = None,
+    allowed_sources: List[str] = None
 ) -> Dict[str, Any]:
     """
     Dynamically analyzes patient context and user question to construct 
@@ -47,7 +48,7 @@ def process_patient_chat(
 
     # 1. Search Qdrant Vector DB specifically for the user's query
     query_context = f"{user_message} {notes[0]['content'] if notes else ''}"
-    guidelines = query_clinical_guidelines(query_context, top_k=3)
+    guidelines = query_clinical_guidelines(query_context, top_k=3, allowed_sources=allowed_sources)
 
     query_lower = user_message.lower()
 

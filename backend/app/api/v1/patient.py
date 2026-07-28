@@ -26,6 +26,7 @@ router = APIRouter(prefix="/patients", tags=["Patient Dashboard"])
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List[dict]] = []
+    allowed_sources: Optional[List[str]] = []
 
 
 class AttestationRequest(BaseModel):
@@ -83,7 +84,8 @@ def patient_chat_assistant(
         patient_uid=patient_uid,
         user_message=payload.message,
         vna_data=vna_data,
-        chat_history=payload.history
+        chat_history=payload.history,
+        allowed_sources=payload.allowed_sources
     )
 
     return result
@@ -189,7 +191,8 @@ def get_patient_attestations(
 @router.get("/{patient_uid}/guideline-recommendations")
 def get_guideline_recommendations(
     patient_uid: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    sources: Optional[str] = None
 ):
     """
     RAG Endpoint: Analyzes patient timeline & scans, queries Qdrant vector DB,
@@ -212,7 +215,14 @@ def get_guideline_recommendations(
     if not unified_context.strip():
         unified_context = f"Acute chest pain shortness of breath dyspnea patient {patient_uid}"
 
-    recommendations = query_clinical_guidelines(unified_context, top_k=3)
+    # parse optional sources query param (comma-separated) from request args
+    # The endpoint can be called as: /guideline-recommendations?sources=ACR,NEJM
+    allowed_sources = None
+    if sources:
+        # split by comma and strip
+        allowed_sources = [s.strip() for s in sources.split(",") if s.strip()]
+
+    recommendations = query_clinical_guidelines(unified_context, top_k=3, allowed_sources=allowed_sources)
 
     return {
         "patient_uid": patient_uid,
