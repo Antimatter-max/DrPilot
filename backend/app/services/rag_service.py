@@ -2,7 +2,7 @@ import os
 import traceback
 from typing import Optional
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 
 QDRANT_HOST = os.getenv("QDRANT_URL", "http://vector_db:6333")
 COLLECTION_NAME = "clinical_guidelines"
@@ -168,7 +168,7 @@ def init_qdrant_guidelines():
         print(f"[Qdrant Init Warning]: {str(e)}")
 
 
-def query_clinical_guidelines(query_text: str, top_k: int = 3):
+def query_clinical_guidelines(query_text: str, top_k: int = 3, allowed_sources: list = None):
     """Encodes query text and performs cosine similarity search against Qdrant."""
     try:
         client = get_qdrant_client()
@@ -184,21 +184,52 @@ def query_clinical_guidelines(query_text: str, top_k: int = 3):
 
         query_vector = list(map(float, embeddings[0]))
 
+        # Build optional Qdrant filter for allowed sources (OR semantics via 'should')
+        q_filter = None
+        try:
+            if allowed_sources:
+                should_conditions = [
+                    FieldCondition(key="source", match=MatchValue(value=src)) for src in allowed_sources
+                ]
+                q_filter = Filter(should=should_conditions)
+        except Exception as fe:
+            print(f"[RAG Filter Warning]: Could not build filter: {fe}")
+            q_filter = None
+
         # Query Qdrant
         search_results = []
         if hasattr(client, "search"):
-            search_results = client.search(
-                collection_name=COLLECTION_NAME,
-                query_vector=query_vector,
-                limit=top_k
-            )
+            # use query_filter if supported
+            if q_filter is not None:
+                search_results = client.search(
+                    collection_name=COLLECTION_NAME,
+                    query_vector=query_vector,
+                    limit=top_k,
+                    query_filter=q_filter
+                )
+            else:
+                search_results = client.search(
+                    collection_name=COLLECTION_NAME,
+                    query_vector=query_vector,
+                    limit=top_k
+                )
         elif hasattr(client, "query_points"):
-            res = client.query_points(
-                collection_name=COLLECTION_NAME,
-                query=query_vector,
-                limit=top_k
-            )
-            search_results = res.points
+            # older API path
+            if q_filter is not None:
+                res = client.search(
+                    collection_name=COLLECTION_NAME,
+                    query_vector=query_vector,
+                    limit=top_k,
+                    query_filter=q_filter
+                )
+                search_results = res
+            else:
+                res = client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query=query_vector,
+                    limit=top_k
+                )
+                search_results = res.points
 
         print(f"[RAG SUCCESS]: Qdrant returned {len(search_results)} results.")
 
