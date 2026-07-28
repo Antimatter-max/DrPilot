@@ -1,0 +1,5 @@
+Category: Physician Note
+Title: Emergency Intake Assessment
+---
+Patient presented with acute shortness of breath and right-sided chest pain lasting 3 hours.
+Oxygen saturation is 92% on room air. The veins look ok but the arteries are bulging.
